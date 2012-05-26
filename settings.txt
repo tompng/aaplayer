@@ -1,0 +1,4 @@
+table: charinfo/OsakaMono.chartable
+flip: no
+color: 1
+edge: 0
