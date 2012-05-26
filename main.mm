@@ -226,6 +226,7 @@ namespace INPUT{
 		Request::bottom=true;
 		if(text[0]=='q'){IOCTLStatus::resetTermios();exit(0);return;}
 		if(text[0]=='f'){FrameImage::colorFlip=!FrameImage::colorFlip;text[index=0]=0;Request::render=true;Request::bottom=true;return;}
+		if(text[0]=='v'){int v=atoi(text+1);[movie setVolume:(v<0?0:v>100?100:v)/100.];Request::bottom=true;text[index=0]=0;return;}
 		int type=0;
 		char*str=text;
 		if(*str=='+'){type=+1;str++;}
@@ -262,6 +263,7 @@ namespace INPUT{
 
 const char*movieFile;
 NSSize movieSize;
+float volume=0;
 QTTime currenttime;
 QTTime duration;
 
@@ -317,15 +319,16 @@ int main(int argc,char**argv){
 	movieFile=argv[1];
 	if(!movieFile){
 		printf("moviefile required.\n");
-		printf("usage: program movifile\n");
+		printf("usage: aaplayer moviefile\n");
 		printf("spaceKey: play/pause\n");
-		printf("arrowKeys: jump 10 sec\n");
+		printf("arrowKeys: move 10 sec\n");
 		printf("commads: \n");
+		printf("\tq           quit\n");
 		printf("\tf           flip color\n");
+		printf("\tvXXX        set volume(0-100)\n");
 		printf("\tXX:YY:ZZ    set time\n");
 		printf("\t+XX:YY:ZZ   move time foreward\n");
 		printf("\t-XX:YY:ZZ   move time backward\n");
-		printf("\tq           quit\n\n");
 		movieFile="sample2.mp4";
 		
 		return 0;
@@ -358,6 +361,7 @@ int main(int argc,char**argv){
 	[movie play];playing=true;
 	currenttime=[movie currentTime];
 	duration=[movie duration];
+	volume=[movie volume];
 	getWinSize();
 	render();
 	while(true){
@@ -398,6 +402,7 @@ int main(int argc,char**argv){
 		}
 		currenttime=[movie currentTime];
 		duration=[movie duration];
+		volume=[movie volume];
 		if(currenttime.timeValue==duration.timeValue){playing=false;[movie stop];}
 		if(Request::winsize){Request::winsize=false;getWinSize();}
 		syncStart();
@@ -423,7 +428,7 @@ namespace FrameRate{
 		if(sec<0){framerateIntegral=1;return 0;}
 		double decay=exp(-sec/timeSpan);
 		framerateIntegral=framerateIntegral*decay+1;
-		return -1/log(1-1/framerateIntegral);
+		return -1/log(1-1/framerateIntegral)/timeSpan;
 	}
 }
 
@@ -455,7 +460,11 @@ void showBottom(){
 	int fr=(int)(10*FrameRate::getFrameRate()+0.5);if(fr>999)fr=999;
 	printf("\x1B[%d;1H\x1B[K",HEIGHT);
 	printf("\x1B[%d;%dH\x1B[1mfps: %d%d.%d\x1B[m",HEIGHT,WIDTH-10,fr/100,fr/10%10,fr%10);
-	printf("\x1B[%d;1H",HEIGHT);
-	printf("\x1B[1m%02d:%02d:%02d / %02d:%02d:%02d\x1B[m",ctime/60/60,ctime/60%60,ctime%60,dtime/60/60,dtime/60%60,dtime%60);
-	printf("  > %s",INPUT::text);
+	printf("\x1B[%d;1H\x1B[1m",HEIGHT);
+	int ivol=(int)(volume*100+0.5);
+	if(volume==0)printf("volume:muted   ");
+	else printf("volume:%3.1d%%    ",ivol<0?0:ivol>100?100:ivol);
+	printf("%02d:%02d:%02d / %02d:%02d:%02d",ctime/60/60,ctime/60%60,ctime%60,dtime/60/60,dtime/60%60,dtime%60);
+	
+	printf("\x1B[m  > %s",INPUT::text);
 }
