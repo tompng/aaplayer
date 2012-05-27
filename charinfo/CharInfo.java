@@ -56,18 +56,13 @@ class CharInfo{
 		}
 		ImageIO.write(img,"png",new File("charindex_before.png"));
 		double minmaxResult[][]=new double[256][256];
-		double allrange=0;
-		for(int i=0;i<256;i++)for(int j=0;j<256;j++)allrange+=difmap[i][j];
-		
 		for(int min=0;min<256;min++){
-			double sumall=allrange;
-			for(int max=255;max>=min;max--){
+			double sumall=0;
+			for(int max=min;max<256;max++){
+				sumall+=difmap[max][max];
+				for(int i=min;i<max;i++)sumall+=difmap[max][i]+difmap[i][max];
 				minmaxResult[min][max]=sumall;
-				sumall-=difmap[max][max];
-				for(int i=min;i<max;i++)sumall-=difmap[max][i]+difmap[i][max];
 			}
-			allrange-=difmap[min][min];
-			for(int i=min+1;i<256;i++)allrange-=difmap[min][i]+difmap[i][min];
 		}
 		int optMin=0,optMax=255;double optDif=Double.MAX_VALUE;
 		for(int min=0;min<256-1;min++)for(int max=min+1;max<256;max++){
