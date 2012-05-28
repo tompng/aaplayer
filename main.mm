@@ -119,14 +119,43 @@ const char*programDirectory(const char*arg0=NULL){
 }
 
 char charTable[256][256];
-void loadCharTable(const char*file){
+void genCharTable(const char*file){
 	FILE*fp=fopen(file,"r");
 	if(!fp){
-		fprintf(stderr,"charTableFile :%s not found\n",file);
+		fprintf(stderr,"charInfoFile :%s not found\n",file);
 		exit(0);
 	}
-	fread(charTable,256,256,fp);
+	char infoChar[256];
+	double info[256][2];
+	int infoLength;
+	char line[256];
+	while(fgets(line,sizeof(line),fp)){
+		if(line[0]&&line[1]==' '&&line[4]==' '){
+			bool err=false;
+			int hexup,hexdown;
+			int cnt=sscanf(line+2,"%2x %2x",&hexup,&hexdown);
+			if(cnt!=2)continue;
+			info[infoLength][0]=hexup;
+			info[infoLength][1]=hexdown;
+			infoChar[infoLength]=line[0];
+			infoLength++;
+		}
+	}
 	fclose(fp);
+	double min=0xff;
+	for(int i=0;i<infoLength;i++){double av=(info[i][0]+info[i][1])/2.0;if(av<min)min=av;}
+	for(int i=0;i<infoLength;i++)for(int j=0;j<2;j++)info[i][j]=0xff*(info[i][j]-min)/(0xff-min);
+	for(int i=0;i<256;i++)for(int j=0;j<256;j++){
+		double costMin=-1;
+		int indexMin=0;
+		for(int k=0;k<infoLength;k++){
+			double difUp=i-info[k][0],difDown=j-info[k][1],difAv=difUp+difDown;
+			double dif2Av=(i+j-info[k][0]-info[k][1])*(i+j-info[k][0]-info[k][1]);
+			double cost=difUp*difUp+difDown*difDown+difAv*difAv*difAv*difAv/1024;
+			if(costMin<0||cost<costMin){costMin=cost;indexMin=k;}
+		}
+		charTable[i][j]=infoChar[indexMin];
+	}
 }
 QTMovie*movie;
 void render();
@@ -180,7 +209,7 @@ void loadSettings(){
 	FILE*fp=fopen(settingsFile,"r");
 	if(!fp){
 		fp=fopen(settingsFile,"w");
-		fprintf(fp,"table: [charTableFile]\nflip: no\ncolor: 1\nedge: 0\n");
+		fprintf(fp,"char: [charInfoFile]\nflip: no\ncolor: 1\nedge: 0\n");
 		fclose(fp);
 		fprintf(stderr,"settings.txt not found.\nedit the generated settings file.\n");
 		exit(0);
@@ -191,10 +220,10 @@ void loadSettings(){
 		char*key=line;
 		char*value=0;
 		for(int i=0;line[i];i++){if(line[i]==':'){value=line+i+1;line[i]=0;if(value[0]==' ')value++;break;}}
-		if(strcmp(key,"table")==0){
+		if(strcmp(key,"char")==0){
 			char ctFile[1024];
 			sprintf(ctFile,"%s%s",programDirectory(),value);
-			loadCharTable(ctFile);
+			genCharTable(ctFile);
 		}
 		if(strcmp(key,"color")==0)sscanf(value,"%f",&FrameImage::colorVal);
 		if(strcmp(key,"edge")==0)sscanf(value,"%f",&FrameImage::edgeVal);

@@ -1,4 +1,4 @@
-table: charinfo/Monaco.chartable
+char: charinfo/Monaco.charinfo
 flip: no
 color: 1
 edge: 0
