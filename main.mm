@@ -149,7 +149,6 @@ void genCharTable(const char*file){
 		int indexMin=0;
 		for(int k=0;k<infoLength;k++){
 			double difUp=i-info[k][0],difDown=j-info[k][1],difAv=difUp+difDown;
-			double dif2Av=(i+j-info[k][0]-info[k][1])*(i+j-info[k][0]-info[k][1]);
 			double cost=difUp*difUp+difDown*difDown+difAv*difAv*difAv*difAv/1024;
 			if(costMin<0||cost<costMin){costMin=cost;indexMin=k;}
 		}
@@ -280,7 +279,7 @@ namespace INPUT{
 	}
 	void input(unsigned char c){
 		if(c<0x20||c>=0x80)return;
-		if(index<sizeof(text)-1){
+		if(index<(int)sizeof(text)-1){
 			text[index++]=c;
 			text[index]=0;
 			Request::bottom=true;
@@ -463,8 +462,6 @@ void render(){
 	Request::render=false;
 	FrameImage::scale();
 	printf("\x1B[1;1H\x1B[K\x1B[1m%s  %s  [ %d x %d ]\x1B[m",playing?"playing":"paused ",movieFile,(int)movieSize.width,(int)movieSize.height);
-	
-	double xoffset,yoffset,xscale,yscale;
 	
 	double w=FrameImage::scaledWidth,h=FrameImage::scaledHeight/2;
 	int wof=0,hof=1;
