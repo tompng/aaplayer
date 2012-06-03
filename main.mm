@@ -127,13 +127,12 @@ void genCharTable(const char*file){
 	}
 	char infoChar[256];
 	double info[256][2];
-	int infoLength;
+	int infoLength=0;
 	char line[256];
 	while(fgets(line,sizeof(line),fp)){
-		if(line[0]&&line[1]==' '&&line[4]==' '){
-			bool err=false;
+		if(line[0]&&line[1]==' '){
 			int hexup,hexdown;
-			int cnt=sscanf(line+2,"%2x %2x",&hexup,&hexdown);
+			int cnt=sscanf(line+2,"%x %x",&hexup,&hexdown);
 			if(cnt!=2)continue;
 			info[infoLength][0]=hexup;
 			info[infoLength][1]=hexdown;
@@ -445,7 +444,6 @@ int main(int argc,char**argv){
 
 namespace FrameRate{
 	double timeSpan=1;
-	double timeSum=0;
 	double framerateIntegral=1;
 	timeval lastTime={0,0};
 	void setTimeSpan(double t){timeSpan=t;framerateIntegral=1;}
