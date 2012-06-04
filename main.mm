@@ -23,6 +23,7 @@ void getWinSize(){
 	WIDTH=ws.ws_col;HEIGHT=ws.ws_row;
 }
 namespace Request{
+	bool quit=false;
 	bool render=false;
 	bool bottom=false;
 	bool stop=false;
@@ -34,16 +35,13 @@ namespace FrameImage{
 	int originalWidth,originalHeight;
 	float*originalData=NULL;
 	float*scaledData=NULL;
-	float*tmpData=NULL;
 	int scaledWidth,scaledHeight;
 	void init(int maxw,int maxh){
 		MAXWIDTH=maxw;MAXHEIGHT=maxh;
 		originalWidth=originalHeight=1;
 		originalData=new float[MAXWIDTH*MAXHEIGHT];
-		tmpData=new float[MAXWIDTH*MAXHEIGHT];
 		scaledData=new float[MAXWIDTH*MAXHEIGHT];
 	}
-	float colorVal=1,edgeVal=0;
 	#define DataRef(arr,x,y) ((arr)[(y)*MAXWIDTH+(x)])
 	float getColorAt(float x,float y){
 		if(x<0||x>1||y<0||y>1)return 1;
@@ -58,18 +56,17 @@ namespace FrameImage{
 					+DataRef(scaledData,ix+1,iy)*x*(1-y)
 					+DataRef(scaledData,ix+1,iy+1)*x*y;
 	}
-	
+	int hoge=0;
 	void update(CVPixelBufferRef img){
 		int width=CVPixelBufferGetWidth(img);
 		int height=CVPixelBufferGetHeight(img);
 		int bytesPerRow=CVPixelBufferGetBytesPerRow(img);
-		int bytesPerPixel=bytesPerRow/width;
-		int rgbOffset=bytesPerPixel==4?1:0;
+		int bytesPerPixel=bytesPerRow/width;		
 		CVPixelBufferLockBaseAddress(img,0);
 		unsigned char*data=(unsigned char*)CVPixelBufferGetBaseAddress(img);
 		unsigned char*rgb;
-		#define imgBytesGetRGB(x,y) (data+bytesPerRow*(y)+bytesPerPixel*(x)+rgbOffset)
-		#define imgBytesGet(x,y) (rgb=imgBytesGetRGB(x,y),(rgb[0]+rgb[1]+rgb[2])/(float)0x300);
+		#define imgBytesGetRGB(x,y) (data+bytesPerRow*(y)+bytesPerPixel*(x))
+		#define imgBytesGet(x,y) (rgb=imgBytesGetRGB(x,y),(0.298912*rgb[1]+0.586611*rgb[2]+0.114478*rgb[3])/(float)0xff);
 		for(int x=0;x<width;x++)for(int y=0;y<height;y++)DataRef(originalData,x,y)=imgBytesGet(x,y);
 		CVPixelBufferUnlockBaseAddress(img,0);
 		originalWidth=width;originalHeight=height;
@@ -77,27 +74,12 @@ namespace FrameImage{
 	}
 	void scale(){
 		int width=originalWidth,height=originalHeight,s=1;
-		while((WIDTH-WOFFSET)*4<width||(HEIGHT-HOFFSET)*8<height){width/=2;height/=2;s*=2;}
-		for(int x=0;x<width;x++)for(int y=0;y<height;y++){
-			float sum=0;
-			for(int ix=0;ix<s;ix++)for(int iy=0;iy<s;iy++)sum+=DataRef(originalData,s*x+ix,s*y+iy);
-			DataRef(tmpData,x,y)=sum/s/s;
-		}
-		for(int x=0;x<width;x++)for(int y=0;y<height;y++){
-			float val=DataRef(tmpData,x,y);
-			float lap=0;
-			if(edgeVal!=0)lap=DataRef(tmpData,x?x-1:x,y)+DataRef(tmpData,x==width-1?x:x+1,y)+DataRef(tmpData,x,y?y-1:y)+DataRef(tmpData,x,y==height-1?y:y+1)-4*val;
-			float col;
-			if(colorFlip)col=1-colorVal+(1-val)*colorVal-edgeVal*lap*lap;
-			else col=1-colorVal+val*colorVal-edgeVal*lap*lap;
-			DataRef(scaledData,x,y)=col<0?0:col>1?1:col;
-		}
-		s=1;
 		while((WIDTH-WOFFSET)*2<width||(HEIGHT-HOFFSET)*4<height){width/=2;height/=2;s*=2;}
 		for(int x=0;x<width;x++)for(int y=0;y<height;y++){
 			float sum=0;
-			for(int ix=0;ix<s;ix++)for(int iy=0;iy<s;iy++)sum+=DataRef(scaledData,s*x+ix,s*y+iy);
-			DataRef(scaledData,x,y)=sum/s/s;
+			for(int ix=0;ix<s;ix++)for(int iy=0;iy<s;iy++)sum+=DataRef(originalData,s*x+ix,s*y+iy);
+			float col=sum/s/s;
+			DataRef(scaledData,x,y)=colorFlip?1-col:col;
 		}
 		scaledWidth=width;scaledHeight=height;
 	}
@@ -156,6 +138,7 @@ void genCharTable(const char*file){
 	}
 }
 QTMovie*movie;
+float defaultVolume=0.5;
 void render();
 void showBottom();
 namespace IOCTLStatus{
@@ -191,10 +174,7 @@ void onStop(int n){
 	Request::stop=true;
 }
 void onExit(int n){
-	syncStart();
-	IOCTLStatus::resetTermios();
-	syncEnd();
-	exit(0);
+	Request::quit=true;
 }
 
 void onResize(int n){
@@ -207,7 +187,7 @@ void loadSettings(){
 	FILE*fp=fopen(settingsFile,"r");
 	if(!fp){
 		fp=fopen(settingsFile,"w");
-		fprintf(fp,"char: [charInfoFile]\nflip: no\ncolor: 1\nedge: 0\n");
+		fprintf(fp,"char: [charInfoFile]\nflip: no\nvolume: 0.5\n");
 		fclose(fp);
 		fprintf(stderr,"settings.txt not found.\nedit the generated settings file.\n");
 		exit(0);
@@ -223,8 +203,7 @@ void loadSettings(){
 			sprintf(ctFile,"%s%s",programDirectory(),value);
 			genCharTable(ctFile);
 		}
-		if(strcmp(key,"color")==0)sscanf(value,"%f",&FrameImage::colorVal);
-		if(strcmp(key,"edge")==0)sscanf(value,"%f",&FrameImage::edgeVal);
+		if(strcmp(key,"volume")==0)sscanf(value,"%f",&defaultVolume);
 		if(strcmp(key,"flip")==0)FrameImage::colorFlip=strcmp(value,"yes")==0;
 	}
 	fclose(fp);
@@ -251,7 +230,7 @@ namespace INPUT{
 	void enter(){
 		if(!text[0])return;
 		Request::bottom=true;
-		if(text[0]=='q'){IOCTLStatus::resetTermios();exit(0);return;}
+		if(text[0]=='q'){Request::quit=true;return;}
 		if(text[0]=='f'){FrameImage::colorFlip=!FrameImage::colorFlip;text[index=0]=0;Request::render=true;Request::bottom=true;return;}
 		if(text[0]=='v'){int v=atoi(text+1);[movie setVolume:(v<0?0:v>100?100:v)/100.];Request::bottom=true;text[index=0]=0;return;}
 		int type=0;
@@ -309,6 +288,7 @@ QTVisualContextRef CreatePixelBufferContext(int width,int height){
 	// Pixel Buffer attributes
 	pixelBufferOptions=CFDictionaryCreateMutable(kCFAllocatorDefault,0,&kCFTypeDictionaryKeyCallBacks,&kCFTypeDictionaryValueCallBacks);
 	if (NULL == pixelBufferOptions) {err = coreFoundationUnknownErr; goto bail;}
+	SetNumberValue(pixelBufferOptions, kCVPixelBufferPixelFormatTypeKey,k32ARGBPixelFormat);
 	SetNumberValue(pixelBufferOptions,kCVPixelBufferWidthKey,width);
 	SetNumberValue(pixelBufferOptions,kCVPixelBufferHeightKey,height);
 	SetNumberValue(pixelBufferOptions,kCVPixelBufferBytesPerRowAlignmentKey, 16);
@@ -343,9 +323,9 @@ int main(int argc,char**argv){
 	syncInit();
 	
 	NSAutoreleasePool*pool=[[NSAutoreleasePool alloc] init];
-	movieFile=argv[1];
-	if(!movieFile){
-		printf("moviefile required.\n");
+	movieFile=argc>=2?argv[1]:NULL;
+	if(!movieFile||strcmp(movieFile,"-h")==0){
+		if(!movieFile)printf("moviefile required.\n");
 		printf("usage: aaplayer moviefile\n");
 		printf("spaceKey: play/pause\n");
 		printf("arrowKeys: move 10 sec\n");
@@ -356,26 +336,25 @@ int main(int argc,char**argv){
 		printf("\tXX:YY:ZZ    set time\n");
 		printf("\t+XX:YY:ZZ   move time foreward\n");
 		printf("\t-XX:YY:ZZ   move time backward\n");
-		movieFile="sample2.mp4";
-		
 		return 0;
 	}
 	NSError*errptr=nil;
 	movie = [[QTMovie alloc] initWithFile:[NSString stringWithUTF8String:movieFile] error:&errptr];
 	if(errptr){
-		printf("%d: %s\n",(int)[errptr code],[[errptr localizedDescription] UTF8String]);
+		fprintf(stderr,"%d: %s\n",(int)[errptr code],[[errptr localizedDescription] UTF8String]);
 		return -1;
 	}
-
 	
 	
 	[[movie attributeForKey:QTMovieNaturalSizeAttribute] getValue:&movieSize];
 	FrameImage::init(movieSize.width,movieSize.height);
 	
 	QTVisualContextRef visualContext=CreatePixelBufferContext(movieSize.width,movieSize.height);
-	if(visualContext==NULL){printf("ERROR_PixelBufferContext_Failed\n");return -1;}
+	if(visualContext==NULL){fprintf(stderr,"ERROR_PixelBufferContext_Failed\n");return -1;}
 	OSStatus status=QTVisualContextSetImageAvailableCallback(visualContext,moviecallback,NULL);
-	if(status!=noErr){printf("ERROR_SetCallBack_Failed\n");return -1;}
+	if(status!=noErr){fprintf(stderr,"ERROR_SetCallBack_Failed\n");return -1;}
+	
+	freopen("/dev/null","w",stderr);
 	
 	IOCTLStatus::initTermios();
 	signal(SIGWINCH,onResize);
@@ -388,7 +367,7 @@ int main(int argc,char**argv){
 	[movie play];playing=true;
 	currenttime=[movie currentTime];
 	duration=[movie duration];
-	volume=[movie volume];
+	[movie setVolume:volume=defaultVolume];
 	getWinSize();
 	render();
 	while(true){
@@ -427,6 +406,7 @@ int main(int argc,char**argv){
 			case 0x7f:INPUT::erase();break;
 			default:INPUT::input(c);
 		}
+		if(Request::quit){IOCTLStatus::resetTermios();exit(0);}
 		currenttime=[movie currentTime];
 		duration=[movie duration];
 		volume=[movie volume];
